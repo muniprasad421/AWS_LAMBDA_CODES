@@ -1,0 +1,42 @@
+import boto3
+import logging
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    try:
+        logger.info("Starting to describe volumes")
+        
+        # Describe volumes with the 'available' status
+        response = ec2.describe_volumes(
+            Filters=[{'Name': 'status', 'Values': ['available']}]
+        )
+        
+        logger.info(f"Volumes described: {response['Volumes']}")
+        
+        # Collect unattached volume IDs
+        volume_ids = [volume['VolumeId'] for volume in response['Volumes']]
+        logger.info(f"Unattached volumes found: {volume_ids}")
+        
+        # Delete unattached volumes
+        for volume_id in volume_ids:
+            logger.info(f"Deleting volume: {volume_id}")
+            ec2.delete_volume(VolumeId=volume_id)
+            logger.info(f"Deleted volume: {volume_id}")
+        
+        if not volume_ids:
+            logger.info("No unattached volumes to delete.")
+    
+    except Exception as e:
+        logger.error(f"Error deleting volumes: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': f"Error: {str(e)}"
+        }
+    
+    return {
+        'statusCode': 200,
+        'body': f"Deleted volumes: {volume_ids}" if volume_ids else "No unattached volumes to delete."
+    }
